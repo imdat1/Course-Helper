@@ -28,6 +28,8 @@ The first use of this endpoint is that you can upload a PDF or DOCX file. When y
 
 What it will do is process the file into a Qdrant vector database collection. Then it will return a JSON object containing a "qdrant_collection_name" and "flash_cards" that's a list of "question"/"answer" pairs.
 
+If an XML file is uploaded, the "process_xml_task" task will be called for Moodle quiz imports.
+
 The qdrant_collection_name will be later used in the '/api/process-ai' endpoint to ask questions based on the PDF/DOCX file by specifying 'pdf_collection_name' or 'docx_collection_name' in the request (refer to that endpoint in this documentation below for a better description)
 
 ##### **Example usage for PDF file**:
@@ -90,6 +92,54 @@ curl -X 'POST' \
     ]
   }
 }
+```
+
+##### **Response Body from a successfull 'process-xml-task' task completed in 'api/task-status/{task_id}'**:
+```
+{
+  "task_id": "c2a9d73b-1d82-41a0-8a86-1a350c9bb85d",
+  "status": "SUCCESS",
+  "result": {
+    "filename": "image-mk.xml",
+    "file_id": "bcca8b99-8876-4c24-943d-387c41b007c6",
+    "status": "XML processing completed",
+    "questions": [
+      {
+        "question_text": "",
+        "question_images": [],
+        "questions_parsed_and_answered": [
+	  type: "",
+	  guidelines:"",
+	  ai_reasoning:"", // FOR 'TABLE' TYPE QUESTION
+	  questions:[
+          {
+            "question": "",
+            "correct_answer": "",
+            "ai_reasoning": "" // FOR 'NORMAL' TYPE QUESTION
+          },
+          {
+            "question": "",
+            "correct_answer": "",
+            "ai_reasoning": ""
+          },
+          {
+            "question": "",
+            "correct_answer": "",
+            "ai_reasoning": ""
+          },
+          {
+            "question": "",
+            "correct_answer": "",
+            "ai_reasoning": ""
+          },
+          {
+            "question": "",
+            "correct_answer": "",
+            "ai_reasoning": ""
+          }
+        ]
+      },
+..."
 ```
 
 #### Getting Flash Cards for Video Ojbect
@@ -525,3 +575,76 @@ curl -X 'POST' \
   }
 }
 ```
+
+## Endpoint: /api/evaluate_flash_card_answer
+
+This endpoint evaluates a user's answer to a flash card against the expected answer using an LLM. It returns a verdict (Correct / Partially Correct / Incorrect), a numerical score (0–100), and brief actionable feedback. Optionally, if you provide a `collection_name`, it will attempt to attach the `source_file_name` from the Qdrant collection most relevant to the question/answer pair. This endpoint is synchronous (NO Celery task ID returned).
+
+##### Required Body Fields:
+- `question`: The flash card question.
+- `expected_answer`: The authoritative / correct answer.
+- `user_answer`: The student's answer to evaluate.
+- `api_key`: Gemini API key.
+
+##### Optional Body Field:
+- `collection_name`: Qdrant collection name to look up nearest source file (adds `source_file_name` in response if found).
+
+##### **Example usage**:
+```
+curl -X 'POST' \
+  'http://localhost:8000/api/evaluate_flash_card_answer' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "question": "What is the primary purpose of positional encoding in Transformers?",
+  "expected_answer": "It injects relative/absolute token position information into embeddings so the model can represent order without recurrence or convolution.",
+  "user_answer": "It tells the model the order of the words.",
+  "api_key": "<YOUR_API_KEY_HERE>",
+  "collection_name": "29c0127f-6620-466d-967f-adabdda7597a"
+}'
+```
+
+##### **Response Body**:
+```
+{
+  "question": "What is the primary purpose of positional encoding in Transformers?",
+  "expected_answer": "It injects relative/absolute token position information into embeddings so the model can represent order without recurrence or convolution.",
+  "user_answer": "It tells the model the order of the words.",
+  "evaluation": {
+    "verdict": "Partially Correct",
+    "score": 72,
+    "feedback": "You captured that it relates to order, but missed that it encodes positions mathematically (sin/cos) to replace recurrence and convolution. Add mention of relative/absolute position signals."
+  },
+  "source_file_name": "attention.pdf"
+}
+```
+
+##### **Example usage WITHOUT collection_name**:
+```
+curl -X 'POST' \
+  'http://localhost:8000/api/evaluate_flash_card_answer' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "question": "Explain why the Transformer uses scaling in dot-product attention.",
+  "expected_answer": "Scaling by 1/√dk keeps dot product magnitudes in a range that prevents extremely small softmax gradients for large dk, stabilizing training.",
+  "user_answer": "It divides by the square root so numbers are not too big.",
+  "api_key": "<YOUR_API_KEY_HERE>"
+}'
+```
+
+##### **Response Body WITHOUT collection_name**:
+```
+{
+  "question": "Explain why the Transformer uses scaling in dot-product attention.",
+  "expected_answer": "Scaling by 1/√dk keeps dot product magnitudes in a range that prevents extremely small softmax gradients for large dk, stabilizing training.",
+  "user_answer": "It divides by the square root so numbers are not too big.",
+  "evaluation": {
+    "verdict": "Partially Correct",
+    "score": 65,
+    "feedback": "Correct intuition about reducing magnitude. Clarify that the goal is to preserve gradient quality in the softmax for large key/query dimensions (dk)."
+  },
+  "source_file_name": null
+}
+```
+
