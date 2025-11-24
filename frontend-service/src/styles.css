@@ -1,0 +1,100 @@
+/* src/styles.css */
+body {
+  background-color: #f8f9fa;
+}
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.message-bubble {
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  position: relative;
+  max-width: 75%;
+  word-wrap: break-word;
+}
+
+.message-bubble.user {
+  background-color: #007bff;
+  color: white;
+  margin-left: auto;
+  border-bottom-right-radius: 5px;
+}
+
+.message-bubble.ai {
+  background-color: #f1f1f1;
+  color: #333;
+  margin-right: auto;
+  border-bottom-left-radius: 5px;
+}
+
+.message-time {
+  font-size: 0.7rem;
+  text-align: right;
+  margin-top: 4px;
+}
+
+/* Quiz view refinements */
+.quiz-container {
+  max-width: 980px;
+}
+
+.question-card {
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+}
+
+.question-card .card-body {
+  padding: 1rem 1.25rem;
+}
+
+.question-content {
+  line-height: 1.6;
+  color: #212529;
+  overflow-x: auto; /* allow wide tables to scroll */
+}
+
+.question-content p {
+  margin-bottom: 0.5rem;
+}
+
+.question-content img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Make plain HTML tables readable */
+.question-content table {
+  border-collapse: collapse;
+  border: 1px solid #dee2e6;
+  background: #fff;
+  margin: 0.5rem 0;
+  width: 100%;
+}
+
+.question-content th,
+.question-content td {
+  border: 1px solid #dee2e6;
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.question-content thead th {
+  background: #f8f9fa;
+  font-weight: 600;
+}
+
+/* AI answer / reasoning block */
+.ai-answer {
+  background: #f1f8ff;
+  border: 1px solid #cfe2ff;
+  border-left: 4px solid #3b82f6;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #0b2e65;
+  white-space: pre-wrap;      /* preserve line breaks */
+  overflow-wrap: anywhere;    /* break long tokens */
+  word-break: break-word;     /* safety */
+}
