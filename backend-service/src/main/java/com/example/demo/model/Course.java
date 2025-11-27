@@ -31,6 +31,9 @@ public class Course {
     @Column(name = "docx_collection_name")
     private String docxCollectionName;
 
+    @Column(name = "pptx_collection_name")
+    private String pptxCollectionName;
+
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "video_id")
     private Video video;
@@ -110,6 +113,14 @@ public class Course {
 
     public void setDocxCollectionName(String docxCollectionName) {
         this.docxCollectionName = docxCollectionName;
+    }
+
+    public String getPptxCollectionName() {
+        return pptxCollectionName;
+    }
+
+    public void setPptxCollectionName(String pptxCollectionName) {
+        this.pptxCollectionName = pptxCollectionName;
     }
 
     public Video getVideo() {

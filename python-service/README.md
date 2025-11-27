@@ -15,12 +15,14 @@ Example usages of the API endpoints can be found in the "example_api_usages.md" 
 3. Make sure you install the following packages:
 "
 apt-get update && apt-get install -y \
+    libreoffice \
     libgl1 \
     libglib2.0-0 \
     poppler-utils \
     tesseract-ocr \
 "
 4. Install the required packages "pip install -r requirements.txt"
+4.1 Better way to get required packages: install Astral 'uv' and run 'uv sync'  
 5. OPTIONAL: In the ".venv/lib/python3.10/site-packages/google/genai/" directory, change the files "_api_client.py" and "files.py" with their respective files located in the "original_files_for_patching" directory. This only adds a specific "timeout" when generating URI links through the Gemini service 
 6. Start a Redis instance, either by using on Linux:
 ```
@@ -36,6 +38,18 @@ or alternatively start a Redis instance as a Docker container:
 ```
 7. Start the Celery task broker by running "celery -A celery_worker worker --loglevel=info --hostname=workerName"
 8. Start the FastAPI app by running "uvicorn main:app --reload"
+
+#### Windows Development Specifics
+
+To run locally on Windows, you'll have to individually install these apps: \
+    libgl1 \
+    libglib2.0-0 \
+    poppler-utils \
+    tesseract-ocr \
+    libreoffice \
+
+You'll also have to configure Windows PATHS. Specifically, if you don't configure the path for LibreOffice (usually "C:\Program Files\LibreOffice\program"), then uploads for DOCX and PPTX
+won't work. Reason? CMD for LibreOffice in Linux is "libreoffice", while in Windows it's "soffice".
 
 #### How to Run it Using Docker Compose
 

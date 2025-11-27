@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import parse from 'html-react-parser';
 import { useParams, Link } from 'react-router-dom';
-import { getQuizQuestions, getUploadedFiles } from '../../services/courseService';
+import { getQuizQuestions, getUploadedFiles, getTaskStatus } from '../../services/courseService';
+import { startSimilarQuizExport, downloadExportedQuiz, getQuizExportTasks } from '../../services/quizExportService';
 import { replacePluginImagesWithBase64 } from '../../utils/htmlImageUtils';
 
 // Placeholder pattern used in Moodle-like cloze syntax
@@ -157,6 +158,7 @@ const QuizView = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [quizTitle, setQuizTitle] = useState('');
+  const [exports, setExports] = useState([]); // [{taskId, status}]
 
   useEffect(()=>{
     const load = async () => {
@@ -164,26 +166,106 @@ const QuizView = () => {
       try {
         const resp = await getQuizQuestions(courseId, fileId);
         setQuestions(Array.isArray(resp.data) ? resp.data : []);
-        // Try to resolve a human-friendly quiz title from uploaded files
+        // Resolve quiz title
         try {
           const filesResp = await getUploadedFiles(courseId);
           const files = Array.isArray(filesResp.data) ? filesResp.data : [];
           const match = files.find(f => (''+f.fileId) === (''+fileId));
-          if (match && match.filename) setQuizTitle(match.filename);
-          else setQuizTitle('');
+          if (match && match.filename) setQuizTitle(match.filename); else setQuizTitle('');
         } catch {}
+        // Load existing export tasks for persistence
+        try {
+          const exportsResp = await getQuizExportTasks(courseId, fileId);
+          const list = Array.isArray(exportsResp.data) ? exportsResp.data : [];
+          const mapped = list.map(t => ({ taskId: t.taskId, status: t.status }));
+          setExports(mapped);
+          // Resume polling for any still pending
+          mapped.filter(x => x.status === 'PENDING').forEach(x => pollStatus(x.taskId));
+        } catch (e) {
+          // Non-critical
+        }
       } catch (e) { setError('Failed to load quiz questions'); }
       finally { setLoading(false); }
     };
     load();
   }, [courseId, fileId]);
 
+  const startExport = async () => {
+    const ok = window.confirm('A new AI-generated quiz will be generated. Are you sure?');
+    if (!ok) return;
+    try {
+      const resp = await startSimilarQuizExport(courseId, fileId);
+      const taskId = resp.data?.taskId;
+      if (taskId) {
+        setExports(prev => [...prev, { taskId, status: 'PENDING' }]);
+        pollStatus(taskId);
+      }
+    } catch (e) {
+      console.error('Failed to start export', e);
+      alert('Failed to start quiz generation.');
+    }
+  };
+
+  const pollStatus = async (taskId) => {
+    const poll = async () => {
+      try {
+        const res = await getTaskStatus(courseId, taskId);
+        const status = res.data?.status || 'PENDING';
+        setExports(prev => prev.map(x => x.taskId === taskId ? { ...x, status } : x));
+        if (status === 'SUCCESS' || status === 'FAILURE') return; // stop
+      } catch (e) {
+        // keep polling on transient errors
+      }
+      setTimeout(poll, 3000);
+    };
+    poll();
+  };
+
+  const downloadExport = async (taskId) => {
+    try {
+      const resp = await downloadExportedQuiz(courseId, taskId);
+      if (resp && resp.data) {
+        const blob = new Blob([resp.data], { type: 'application/xml' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ai_quiz_${taskId}.xml`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert('Export not ready yet.');
+      }
+    } catch (e) {
+      alert('Export not ready yet.');
+    }
+  };
+
   return (
     <div className="container mt-4 quiz-container">
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h3 className="mb-0">{quizTitle ? `Quiz: ${quizTitle}` : `Quiz`}</h3>
-        <Link to={`/courses/${courseId}`} className="btn btn-outline-secondary">Back to Course</Link>
+        <div className="d-flex gap-2">
+          <button type="button" className="btn btn-primary" onClick={startExport}>Create similar quiz</button>
+          <Link to={`/courses/${courseId}`} className="btn btn-outline-secondary">Back to Course</Link>
+        </div>
       </div>
+      {exports.length > 0 && (
+        <div className="mb-3">
+          <h6>AI Quiz Generations</h6>
+          <ul className="list-group">
+            {exports.map(x => (
+              <li key={x.taskId} className="list-group-item d-flex justify-content-between align-items-center">
+                <span>{x.status === 'PENDING' ? 'Quiz generation in progress...' : `Status: ${x.status}`}</span>
+                {x.status === 'SUCCESS' && (
+                  <button className="btn btn-sm btn-success" onClick={() => downloadExport(x.taskId)}>Download</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {error && <div className="alert alert-danger">{error}</div>}
       {loading && <div>Loading quiz...</div>}
       {!loading && questions.length === 0 && <div className="alert alert-info">No questions found.</div>}

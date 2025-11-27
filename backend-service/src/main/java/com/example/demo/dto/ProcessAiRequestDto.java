@@ -23,6 +23,9 @@ public class ProcessAiRequestDto {
     
     @JsonProperty("docx_collection_name")
     private String docxCollectionName;
+
+    @JsonProperty("pptx_collection_name")
+    private String pptxCollectionName;
     
     private VideoDto video;
     

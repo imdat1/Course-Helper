@@ -1,16 +1,18 @@
 // components/courses/MaterialUpload.js
 import React, { useState } from 'react';
-import { uploadPdf, uploadDocx, uploadVideo, addYoutubeVideo, uploadXml } from '../../services/courseService';
+import { uploadPdf, uploadDocx, uploadPptx, uploadVideo, addYoutubeVideo, uploadXml } from '../../services/courseService';
 import { FaFilePdf, FaFileWord, FaVideo, FaYoutube } from 'react-icons/fa';
 
-const MaterialUpload = ({ courseId, onUploadComplete, onUploadStart }) => {
+const MaterialUpload = ({ courseId, onUploadComplete, onUploadStart, hasTextMaterials = false }) => {
   const [pdfFiles, setPdfFiles] = useState([]);
   const [docxFiles, setDocxFiles] = useState([]);
   const [videoFile, setVideoFile] = useState(null);
+  const [pptxFiles, setPptxFiles] = useState([]);
   const [xmlFiles, setXmlFiles] = useState([]);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [loadingDocx, setLoadingDocx] = useState(false);
+  const [loadingPptx, setLoadingPptx] = useState(false);
   const [loadingXml, setLoadingXml] = useState(false);
   const [loadingVideo, setLoadingVideo] = useState(false);
   const [loadingYoutube, setLoadingYoutube] = useState(false);
@@ -67,6 +69,31 @@ const MaterialUpload = ({ courseId, onUploadComplete, onUploadStart }) => {
     } finally {
       setLoadingDocx(false);
     }
+  };
+
+  const handlePptxUpload = async (e) => {
+    e.preventDefault();
+    if (!pptxFiles || pptxFiles.length === 0) return;
+    setLoadingPptx(true); setError(''); setSuccess('');
+    // Validate extensions client-side
+    const invalid = pptxFiles.filter(f => !f.name.toLowerCase().endsWith('.pptx'));
+    if (invalid.length) {
+      setError('One or more selected files are not PPTX.');
+      setLoadingPptx(false);
+      return;
+    }
+    try {
+      if (onUploadStart) {
+        onUploadStart(pptxFiles.map((f, idx) => ({ tempId: `pptx-${Date.now()}-${idx}`, filename: f.name, type: 'PPTX' })));
+      }
+      await Promise.allSettled(pptxFiles.map(f => uploadPptx(courseId, f)));
+      if (onUploadComplete) onUploadComplete();
+      setSuccess(`Uploaded ${pptxFiles.length} PPTX file(s)`);
+      setPptxFiles([]);
+    } catch (err) {
+      setError('Failed to upload PPTX');
+      console.error(err);
+    } finally { setLoadingPptx(false); }
   };
 
   const handleVideoUpload = async (e) => {
@@ -182,10 +209,13 @@ const MaterialUpload = ({ courseId, onUploadComplete, onUploadStart }) => {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={loadingXml || !xmlFiles || xmlFiles.length === 0}
+              disabled={loadingXml || !xmlFiles || xmlFiles.length === 0 || !hasTextMaterials}
             >
               {loadingXml ? 'Uploading...' : 'Upload XML'}
             </button>
+            {!hasTextMaterials && (
+              <div className="form-text text-muted mt-1">Must have uploaded at least 1 PDF/DOCX/PPTX</div>
+            )}
           </form>
         </div>
         
@@ -207,6 +237,28 @@ const MaterialUpload = ({ courseId, onUploadComplete, onUploadStart }) => {
               disabled={loadingDocx || !docxFiles || docxFiles.length === 0}
             >
               {loadingDocx ? 'Uploading...' : 'Upload DOCX'}
+            </button>
+          </form>
+        </div>
+
+        <div className="mb-4">
+          <h6>Upload PPTX</h6>
+          <form onSubmit={handlePptxUpload}>
+            <div className="mb-3">
+              <input
+                type="file"
+                className="form-control"
+                accept=".pptx"
+                multiple
+                onChange={(e) => setPptxFiles(Array.from(e.target.files))}
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loadingPptx || !pptxFiles || pptxFiles.length === 0}
+            >
+              {loadingPptx ? 'Uploading...' : 'Upload PPTX'}
             </button>
           </form>
         </div>

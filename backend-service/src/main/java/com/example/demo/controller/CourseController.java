@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -152,6 +153,7 @@ public class CourseController {
             // Set both PDF and DOCX collection names to the same shared value
             courseService.setPdfCollectionName(id, materialsCollection);
             courseService.setDocxCollectionName(id, materialsCollection);
+            courseService.setPptxCollectionName(id, materialsCollection);
             course = courseService.getCourseById(id).orElse(course);
         }
 
@@ -306,89 +308,73 @@ public class CourseController {
 
     @PostMapping("/{id}/upload-docx")
     public ResponseEntity<CourseDto> uploadDocx(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
-        // Verify course exists
         Course course = courseService.getCourseById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found"));
-        
-        // Ensure the same shared collection for ALL text materials (PDF + DOCX)
-        String materialsCollection2 = course.getPdfCollectionName();
-        if (materialsCollection2 == null || materialsCollection2.isEmpty()) {
-            materialsCollection2 = course.getDocxCollectionName();
-        }
-        if (materialsCollection2 == null || materialsCollection2.isEmpty()) {
-            materialsCollection2 = "course_" + id + "_materials";
-            courseService.setPdfCollectionName(id, materialsCollection2);
-            courseService.setDocxCollectionName(id, materialsCollection2);
+        String materialsCollection = course.getPdfCollectionName();
+        if (materialsCollection == null || materialsCollection.isEmpty()) materialsCollection = course.getDocxCollectionName();
+        if (materialsCollection == null || materialsCollection.isEmpty()) materialsCollection = course.getPptxCollectionName();
+        if (materialsCollection == null || materialsCollection.isEmpty()) {
+            materialsCollection = "course_" + id + "_materials";
+            courseService.setPdfCollectionName(id, materialsCollection);
+            courseService.setDocxCollectionName(id, materialsCollection);
+            courseService.setPptxCollectionName(id, materialsCollection);
             course = courseService.getCourseById(id).orElse(course);
         }
-
-    // Upload file and get initial response (pass the shared collection)
-    UploadResponseDto response = apiClient.uploadDocxFile(file, materialsCollection2).block();
-        if (response == null || response.getTaskId() == null) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload DOCX");
-        }
-        
-        // Create task for tracking (still useful for background processing)
-    taskService.createTask(response.getTaskId(), "PENDING", id); // track video upload task
-
-        // Early persist UploadedFile metadata with PENDING status
+        UploadResponseDto response = apiClient.uploadDocxFile(file, materialsCollection).block();
+        if (response == null || response.getTaskId() == null) throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload DOCX");
+        taskService.createTask(response.getTaskId(), "PENDING", id);
         try {
             com.example.demo.model.UploadedFile uf = new com.example.demo.model.UploadedFile();
-            uf.setCourse(course);
-            uf.setType("DOCX");
-            uf.setFilename(response.getFilename());
-            uf.setFileId(response.getFileId());
-            uf.setCollectionName(materialsCollection2);
-            String processingTaskId = response.getParseSummariseIngestTaskId() != null ? response.getParseSummariseIngestTaskId() : response.getTaskId();
-            uf.setProcessingTaskId(processingTaskId);
+            uf.setCourse(course); uf.setType("DOCX"); uf.setFilename(response.getFilename()); uf.setFileId(response.getFileId()); uf.setCollectionName(materialsCollection);
+            uf.setProcessingTaskId(response.getParseSummariseIngestTaskId() != null ? response.getParseSummariseIngestTaskId() : response.getTaskId());
             uploadedFileService.save(uf);
-        } catch (Exception e) {
-            System.err.println("Failed early save of DOCX metadata: " + e.getMessage());
-        }
-        
-        // Check for parse task and wait for it to complete
+        } catch (Exception e) { System.err.println("Failed early save of DOCX metadata: " + e.getMessage()); }
         if (response.getParseSummariseIngestTaskId() != null) {
-            String parseTaskId = response.getParseSummariseIngestTaskId();
-            taskService.createTask(parseTaskId, "PENDING", id); // record parse task for DOCX
-            
-            // Poll until the parse task completes (with timeout)
+            String parseTaskId = response.getParseSummariseIngestTaskId(); taskService.createTask(parseTaskId, "PENDING", id);
             TaskResponseDto parseTaskResponse = waitForTaskCompletion(parseTaskId);
-            
             if (parseTaskResponse != null && "SUCCESS".equals(parseTaskResponse.getStatus())) {
-                // Extract collection name and flash cards
-                Map<String, Object> resultMap = (Map<String, Object>) parseTaskResponse.getResult();
-                
-                // Update per-file metadata to READY; collection already set to shared
-                String collectionName = (String) resultMap.get("qdrant_collection_name");
-                try {
-                    uploadedFileService.findById(response.getFileId()).ifPresent(existing -> {
-                        if (existing.getCollectionName() == null && collectionName != null) {
-                            existing.setCollectionName(collectionName);
-                        }
-                        existing.setStatus("READY");
-                        uploadedFileService.save(existing);
-                    });
-                } catch (Exception e) {
-                    System.err.println("Failed to update DOCX metadata to READY: " + e.getMessage());
-                }
-                
-                // Extract and add flash cards
-                List<Map<String, String>> flashCardsMap = (List<Map<String, String>>) resultMap.get("flash_cards");
-                if (flashCardsMap != null && !flashCardsMap.isEmpty()) {
-                    addFlashCardsToCourseWithSource(id, flashCardsMap, response.getFileId());
-                }
-            } else {
-                uploadedFileService.findById(response.getFileId()).ifPresent(existing -> {
-                    existing.setStatus("FAILED");
-                    uploadedFileService.save(existing);
-                });
-            }
+                Map<String,Object> resultMap = (Map<String,Object>) parseTaskResponse.getResult(); String collName = (String) resultMap.get("qdrant_collection_name");
+                try { uploadedFileService.findById(response.getFileId()).ifPresent(existing -> { if (existing.getCollectionName()==null && collName!=null) existing.setCollectionName(collName); existing.setStatus("READY"); uploadedFileService.save(existing); }); } catch (Exception e) { System.err.println("Failed to update DOCX metadata to READY: " + e.getMessage()); }
+                List<Map<String,String>> flashCardsMap = (List<Map<String,String>>) resultMap.get("flash_cards"); if (flashCardsMap!=null && !flashCardsMap.isEmpty()) addFlashCardsToCourseWithSource(id, flashCardsMap, response.getFileId());
+            } else { uploadedFileService.findById(response.getFileId()).ifPresent(existing -> { existing.setStatus("FAILED"); uploadedFileService.save(existing); }); }
         }
-        
-        // Return the updated course
         return ResponseEntity.ok(convertToDto(courseService.getCourseById(id).get()));
     }
 
+    @PostMapping("/{id}/upload-pptx")
+    public ResponseEntity<CourseDto> uploadPptx(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        Course course = courseService.getCourseById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found"));
+        String materialsCollection = course.getPdfCollectionName();
+        if (materialsCollection == null || materialsCollection.isEmpty()) materialsCollection = course.getDocxCollectionName();
+        if (materialsCollection == null || materialsCollection.isEmpty()) materialsCollection = course.getPptxCollectionName();
+        if (materialsCollection == null || materialsCollection.isEmpty()) {
+            materialsCollection = "course_" + id + "_materials";
+            courseService.setPdfCollectionName(id, materialsCollection);
+            courseService.setDocxCollectionName(id, materialsCollection);
+            courseService.setPptxCollectionName(id, materialsCollection);
+            course = courseService.getCourseById(id).orElse(course);
+        }
+        UploadResponseDto response = apiClient.uploadPptxFile(file, materialsCollection).block();
+        if (response == null || response.getTaskId() == null) throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload PPTX");
+        taskService.createTask(response.getTaskId(), "PENDING", id);
+        try {
+            com.example.demo.model.UploadedFile uf = new com.example.demo.model.UploadedFile();
+            uf.setCourse(course); uf.setType("PPTX"); uf.setFilename(response.getFilename()); uf.setFileId(response.getFileId()); uf.setCollectionName(materialsCollection);
+            uf.setProcessingTaskId(response.getParseSummariseIngestTaskId() != null ? response.getParseSummariseIngestTaskId() : response.getTaskId());
+            uploadedFileService.save(uf);
+        } catch (Exception e) { System.err.println("Failed early save of PPTX metadata: " + e.getMessage()); }
+        if (response.getParseSummariseIngestTaskId() != null) {
+            String parseTaskId = response.getParseSummariseIngestTaskId(); taskService.createTask(parseTaskId, "PENDING", id);
+            TaskResponseDto parseTaskResponse = waitForTaskCompletion(parseTaskId);
+            if (parseTaskResponse != null && "SUCCESS".equals(parseTaskResponse.getStatus())) {
+                Map<String,Object> resultMap = (Map<String,Object>) parseTaskResponse.getResult(); String collName = (String) resultMap.get("qdrant_collection_name");
+                try { uploadedFileService.findById(response.getFileId()).ifPresent(existing -> { if (existing.getCollectionName()==null && collName!=null) existing.setCollectionName(collName); existing.setStatus("READY"); uploadedFileService.save(existing); }); } catch (Exception e) { System.err.println("Failed to update PPTX metadata to READY: " + e.getMessage()); }
+                List<Map<String,String>> flashCardsMap = (List<Map<String,String>>) resultMap.get("flash_cards"); if (flashCardsMap!=null && !flashCardsMap.isEmpty()) addFlashCardsToCourseWithSource(id, flashCardsMap, response.getFileId());
+            } else { uploadedFileService.findById(response.getFileId()).ifPresent(existing -> { existing.setStatus("FAILED"); uploadedFileService.save(existing); }); }
+        }
+        return ResponseEntity.ok(convertToDto(courseService.getCourseById(id).get()));
+    }
     @PostMapping("/{id}/upload-video")
     public ResponseEntity<CourseDto> uploadVideo(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
         // Verify course exists
@@ -742,6 +728,7 @@ public class CourseController {
         
         dto.setPdfCollectionName(course.getPdfCollectionName());
         dto.setDocxCollectionName(course.getDocxCollectionName());
+        dto.setPptxCollectionName(course.getPptxCollectionName());
         
         if (course.getVideo() != null) {
             VideoDto videoDto = new VideoDto();
@@ -1021,6 +1008,116 @@ public class CourseController {
         return ResponseEntity.ok(dtos);
     }
 
+    // Create a similar AI-generated quiz from an existing XML quiz
+    @PostMapping("/{id}/quizzes/{fileId}/generate-similar")
+    public ResponseEntity<TaskResponseDto> generateSimilarQuiz(@PathVariable Long id, @PathVariable String fileId) {
+        Course course = courseService.getCourseById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found"));
+
+        com.example.demo.model.UploadedFile file = uploadedFileService.findById(fileId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
+        if (file.getCourse() == null || !course.getId().equals(file.getCourse().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "File does not belong to this course");
+        }
+        if (!"XML".equalsIgnoreCase(file.getType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is not an XML quiz");
+        }
+
+        // Obtain the original processing task result which has the questions DTOs
+        String sourceTaskId = file.getProcessingTaskId();
+        if (sourceTaskId == null || sourceTaskId.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Original processing task not found for this quiz");
+        }
+        com.example.demo.model.Task sourceTask = taskService
+                .getTasksForCourse(course)
+                .stream()
+                .filter(t -> sourceTaskId.equals(t.getTaskId()))
+                .findFirst()
+                .orElse(null);
+        if (sourceTask == null || sourceTask.getResult() == null || sourceTask.getResult().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Original task result not available");
+        }
+        // Parse result JSON and extract questions list
+        ObjectMapper mapper = new ObjectMapper();
+        java.util.Map<String, Object> resultMap;
+        try {
+            resultMap = mapper.readValue(sourceTask.getResult(), new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String,Object>>(){});
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed parsing original task result");
+        }
+        Object questionsObj = resultMap.get("questions");
+        if (!(questionsObj instanceof java.util.List)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No questions found in original task result");
+        }
+        @SuppressWarnings("unchecked")
+        java.util.List<java.util.Map<String,Object>> questions = (java.util.List<java.util.Map<String,Object>>) questionsObj;
+
+        // Resolve collection name
+        String collectionName = file.getCollectionName();
+        if (collectionName == null || collectionName.isEmpty()) {
+            collectionName = course.getPdfCollectionName();
+            if (collectionName == null || collectionName.isEmpty()) {
+                collectionName = course.getDocxCollectionName();
+            }
+            if (collectionName == null || collectionName.isEmpty()) {
+                collectionName = course.getPptxCollectionName();
+            }
+        }
+        if (collectionName == null || collectionName.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No materials collection found for this course");
+        }
+
+        // Call Python to start export
+        TaskResponseDto resp = apiClient.exportQuizFromQuestions(questions, collectionName).block();
+        if (resp == null || resp.getTaskId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Failed to enqueue export task");
+        }
+
+        // Persist task with metadata for tracking
+        taskService.createTask(resp.getTaskId(), resp.getStatus() != null ? resp.getStatus() : "PENDING", id, "QUIZ_EXPORT", fileId);
+
+        return ResponseEntity.ok(resp);
+    }
+
+    // Download generated AI quiz by export task id
+    @GetMapping("/{id}/quizzes/exports/{taskId}/download")
+    public ResponseEntity<byte[]> downloadGeneratedQuiz(@PathVariable Long id, @PathVariable String taskId) {
+        // Ensure course exists (authorization boundary)
+        courseService.getCourseById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found"));
+        try {
+            byte[] data = apiClient.downloadExportedQuiz(taskId).block();
+            if (data == null || data.length == 0) {
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(null);
+            }
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=ai_quiz_" + taskId + ".xml");
+            headers.add(HttpHeaders.CONTENT_TYPE, "application/xml");
+            return new ResponseEntity<>(data, headers, HttpStatus.OK);
+        } catch (Exception e) {
+            // If task is not yet complete, return 202 so client can keep polling
+            return ResponseEntity.status(HttpStatus.ACCEPTED).build();
+        }
+    }
+
+    // List export tasks for a given XML quiz file
+    @GetMapping("/{id}/quizzes/{fileId}/exports")
+    public ResponseEntity<java.util.List<TaskResponseDto>> listQuizExportTasks(@PathVariable Long id, @PathVariable String fileId) {
+        Course course = courseService.getCourseById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found"));
+        java.util.List<Task> tasks = taskService.getTasksForCourse(course).stream()
+                .filter(t -> "QUIZ_EXPORT".equals(t.getTaskType()) && fileId.equals(t.getSourceFileId()))
+                .collect(java.util.stream.Collectors.toList());
+        java.util.List<TaskResponseDto> dtos = tasks.stream().map(t -> {
+            TaskResponseDto dto = new TaskResponseDto();
+            dto.setTaskId(t.getTaskId());
+            dto.setStatus(t.getStatus());
+            dto.setResult(t.getResult());
+            return dto;
+        }).collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(dtos);
+    }
+
     // Fetch questions for a specific XML file
     @GetMapping("/{id}/questions/{fileId}")
     public ResponseEntity<List<CourseQuestionDto>> getXmlQuestions(@PathVariable Long id, @PathVariable String fileId) {
@@ -1166,6 +1263,51 @@ public class CourseController {
         throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected deletion response");
     }
 
+    // Delete a specific PPTX file's points from the course collection
+    @DeleteMapping("/{id}/materials/pptx/{fileId}")
+    public ResponseEntity<Map<String,Object>> deletePptxFile(@PathVariable Long id, @PathVariable String fileId) {
+        Course course = courseService.getCourseById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Course not found"));
+
+        com.example.demo.model.UploadedFile file = uploadedFileService.findById(fileId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
+        if (file.getCourse() == null || !course.getId().equals(file.getCourse().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "File does not belong to this course");
+        }
+        if (!"PPTX".equalsIgnoreCase(file.getType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is not a PPTX");
+        }
+
+        String collectionName = file.getCollectionName();
+        if (collectionName == null || collectionName.isEmpty()) {
+            collectionName = course.getPptxCollectionName();
+        }
+        if (collectionName == null || collectionName.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No PPTX collection available for deletion");
+        }
+
+        Map<String,Object> resp = apiClient.deleteFileFromCollection(collectionName, fileId).block();
+
+        if (resp != null && resp.get("task_id") instanceof String) {
+            String taskId = (String) resp.get("task_id");
+            try { flashCardRepository.deleteByUploadedFileId(fileId); } catch (Exception ignore) {}
+            uploadedFileService.deleteByFileId(fileId);
+            return ResponseEntity.ok(Map.of(
+                "status", "SUCCESS",
+                "task_id", taskId,
+                "message", "Deletion enqueued and metadata removed"
+            ));
+        }
+
+        if (resp != null && "SUCCESS".equals(resp.get("status"))) {
+            try { flashCardRepository.deleteByUploadedFileId(fileId); } catch (Exception ignore) {}
+            uploadedFileService.deleteByFileId(fileId);
+            return ResponseEntity.ok(resp);
+        }
+
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected deletion response");
+    }
+
     // Delete a video or YouTube entry from the course (no Qdrant cleanup needed)
     @DeleteMapping("/{id}/materials/video/{fileId}")
     public ResponseEntity<Map<String,Object>> deleteVideoFile(@PathVariable Long id, @PathVariable String fileId) {
@@ -1258,6 +1400,9 @@ public class CourseController {
         }
         if (course.getDocxCollectionName() != null) {
             processAiRequest.setDocxCollectionName(course.getDocxCollectionName());
+        }
+        if (course.getPptxCollectionName() != null) {
+            processAiRequest.setPptxCollectionName(course.getPptxCollectionName());
         }
         if (course.getVideo() != null) {
             VideoDto videoDto = new VideoDto();

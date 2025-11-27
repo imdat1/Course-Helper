@@ -1,7 +1,15 @@
 package com.example.demo.model;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "tasks")
@@ -32,6 +40,14 @@ public class Task {
     @JoinColumn(name = "course_id")
     private Course course;
 
+    // Optional categorisation of task (e.g. QUIZ_EXPORT, PROCESS_XML, PARSE_INGEST, FLASH_CARDS)
+    @Column(name = "task_type")
+    private String taskType;
+
+    // For tasks derived from a specific uploaded file (e.g. export of quiz from XML)
+    @Column(name = "source_file_id")
+    private String sourceFileId;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -43,6 +59,13 @@ public class Task {
     public Task(String taskId, String status) {
         this.taskId = taskId;
         this.status = status;
+    }
+
+    public Task(String taskId, String status, String taskType, String sourceFileId) {
+        this.taskId = taskId;
+        this.status = status;
+        this.taskType = taskType;
+        this.sourceFileId = sourceFileId;
     }
 
     // Getters and Setters
@@ -100,5 +123,21 @@ public class Task {
 
     public void setCourse(Course course) {
         this.course = course;
+    }
+
+    public String getTaskType() {
+        return taskType;
+    }
+
+    public void setTaskType(String taskType) {
+        this.taskType = taskType;
+    }
+
+    public String getSourceFileId() {
+        return sourceFileId;
+    }
+
+    public void setSourceFileId(String sourceFileId) {
+        this.sourceFileId = sourceFileId;
     }
 }

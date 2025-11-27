@@ -63,46 +63,36 @@ public class CourseService {
         }
         Course course = maybeCourse.get();
 
-        // Attempt to delete entire collections (PDF and DOCX) if present
+        // Attempt to delete entire collections (PDF, DOCX, PPTX) if present
         try {
             taskRepository.deleteByCourseId(id);
         } catch (Exception e) {
             System.err.println("Failed to cleanup tasks: " + e.getMessage());
         }
-        boolean pdfDeleted = true;
-        boolean docxDeleted = true;
         boolean attemptedDeletion = false;
-        try {
-            if (course.getPdfCollectionName() != null) {
+        boolean allDeleted = true;
+        java.util.Set<String> collections = new java.util.HashSet<>();
+        if (course.getPdfCollectionName() != null) collections.add(course.getPdfCollectionName());
+        if (course.getDocxCollectionName() != null) collections.add(course.getDocxCollectionName());
+        if (course.getPptxCollectionName() != null) collections.add(course.getPptxCollectionName());
+
+        for (String coll : collections) {
+            try {
                 attemptedDeletion = true;
-                Map<String, Object> resp = apiClient.deleteCollection(course.getPdfCollectionName()).block();
+                Map<String, Object> resp = apiClient.deleteCollection(coll).block();
                 String taskId = resp != null && resp.get("task_id") instanceof String ? (String) resp.get("task_id") : null;
                 if (taskId != null) {
                     var status = waitForTaskCompletion(taskId, 24, 5_000);
-                    pdfDeleted = status != null && "SUCCESS".equals(status.getStatus());
+                    boolean deleted = status != null && "SUCCESS".equals(status.getStatus());
+                    if (!deleted) allDeleted = false;
                 }
+            } catch (Exception e) {
+                System.err.println("Failed to enqueue/poll collection deletion (" + coll + "): " + e.getMessage());
+                allDeleted = false;
             }
-        } catch (Exception e) {
-            System.err.println("Failed to enqueue/poll PDF collection deletion: " + e.getMessage());
-            pdfDeleted = false;
-        }
-        try {
-            if (course.getDocxCollectionName() != null) {
-                attemptedDeletion = true;
-                Map<String, Object> resp = apiClient.deleteCollection(course.getDocxCollectionName()).block();
-                String taskId = resp != null && resp.get("task_id") instanceof String ? (String) resp.get("task_id") : null;
-                if (taskId != null) {
-                    var status = waitForTaskCompletion(taskId, 24, 5_000);
-                    docxDeleted = status != null && "SUCCESS".equals(status.getStatus());
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("Failed to enqueue/poll DOCX collection deletion: " + e.getMessage());
-            docxDeleted = false;
         }
 
-        // If we attempted any collection deletion, require success before DB cleanup
-        if (attemptedDeletion && !(pdfDeleted && docxDeleted)) {
+        if (attemptedDeletion && !allDeleted) {
             throw new RuntimeException("Collection deletion failed; aborting course deletion");
         }
 
@@ -141,6 +131,14 @@ public class CourseService {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new RuntimeException("Course not found"));
         course.setDocxCollectionName(collectionName);
+        return courseRepository.save(course);
+    }
+
+    @Transactional
+    public Course setPptxCollectionName(Long courseId, String collectionName) {
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new RuntimeException("Course not found"));
+        course.setPptxCollectionName(collectionName);
         return courseRepository.save(course);
     }
     

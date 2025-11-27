@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, UploadFile, Form, HTTPException
+from fastapi import FastAPI, APIRouter, UploadFile, Form, HTTPException, Response
 from pydantic import ValidationError
 from celery.result import AsyncResult
 from app.models.request import AIRequest
@@ -12,7 +12,8 @@ from celery_worker import (
     create_flash_cards_task,
     delete_file_points_task,
     delete_collection_task,
-    process_xml_file
+    process_xml_file,
+    export_moodle_quiz
     )  
 import uuid
 from app.models.request import UriRequest
@@ -22,6 +23,7 @@ from typing import Optional
 from app.models.flash_cards import FlashCardList
 from app.models.answer_evaluation import AnswerEvaluationRequest, AnswerEvaluationResult
 import json
+from app.models.moodle_models.dto_moodle_question import DTOMoodleQuestion
 
 router = APIRouter()
 
@@ -78,7 +80,9 @@ async def upload_file(video: Optional[str] = Form(None), file: Optional[UploadFi
             process_xml_task = process_xml_file.apply_async(args=[file_id, file.filename, target_collection, file_content, api_key])
             return_obj["process_xml_task_id"] = process_xml_task.id
 
-        if (file.content_type==FileTypeFastAPI.PDF and file.filename.lower().endswith(".pdf")) or (file.content_type == FileTypeFastAPI.WORD and file.filename.lower().endswith(".docx")):
+        if ((file.content_type==FileTypeFastAPI.PDF and file.filename.lower().endswith(".pdf"))
+            or (file.content_type == FileTypeFastAPI.WORD and file.filename.lower().endswith(".docx"))
+            or (file.content_type == FileTypeFastAPI.POWERPOINT and file.filename.lower().endswith(".pptx"))):
             # If a course-level collection_name is provided, ingest into that; else default to file_id
             target_collection = collection_name if collection_name else file_id
             parse_summarise_ingest_task = parse_summarize_ingest_pdf_task.apply_async(args=[file_id, file.filename, file_content, api_key, file.content_type, target_collection])
@@ -176,3 +180,48 @@ async def evaluate_flash_card_answer_route(request: AnswerEvaluationRequest):
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
+
+
+@router.post("/export_quiz")
+async def export_quiz_route(payload: dict):
+    """
+    Enqueue export of a Moodle quiz XML from provided questions DTO dicts.
+
+    Expects JSON body:
+    {
+      "questions": [ { ... DTOMoodleQuestion dict ... }, ... ],
+      "collection_name": "course_123_materials",
+      "api_key": "<gemini_api_key>"
+    }
+    Returns: { "task_id": str, "status": "PENDING" }
+    """
+    try:
+        questions = payload.get("questions", [])
+        collection_name = payload.get("collection_name")
+        api_key = payload.get("api_key")
+        if not isinstance(questions, list) or not collection_name or not api_key:
+            raise HTTPException(status_code=400, detail="questions[], collection_name and api_key are required")
+
+        # We pass the list of dicts directly; the Celery task will parse into DTOMoodleQuestion
+        task = export_moodle_quiz.apply_async(args=[questions, collection_name, api_key])
+        return {"task_id": task.id, "status": "PENDING"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to enqueue export: {str(e)}")
+
+
+@router.get("/export_quiz/{task_id}/download")
+async def download_exported_quiz(task_id: str):
+    """
+    Download the generated Moodle XML once the export task is SUCCESS.
+    Returns application/xml with Content-Disposition for download.
+    """
+    task_result = AsyncResult(task_id)
+    if task_result.status != "SUCCESS":
+        return {"task_id": task_id, "status": task_result.status}
+    result_bytes = task_result.result
+    if not isinstance(result_bytes, (bytes, bytearray)):
+        raise HTTPException(status_code=500, detail="Task did not return file bytes")
+    headers = {"Content-Disposition": f"attachment; filename=moodle_quiz_export_{task_id}.xml"}
+    return Response(content=result_bytes, media_type="application/xml", headers=headers)

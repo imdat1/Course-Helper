@@ -41,6 +41,12 @@ public class TaskService {
         courseService.getCourseById(courseId).ifPresent(task::setCourse);
         return taskRepository.save(task);
     }
+
+    public Task createTask(String taskId, String status, Long courseId, String taskType, String sourceFileId) {
+        Task task = new Task(taskId, status, taskType, sourceFileId);
+        courseService.getCourseById(courseId).ifPresent(task::setCourse);
+        return taskRepository.save(task);
+    }
     
     public Task updateTaskStatus(String taskId, String status, String result) {
         Task task = taskRepository.findById(taskId)
@@ -194,6 +200,9 @@ public class TaskService {
                             } else if (fileName.toLowerCase().endsWith(".docx")) {
                                 courseService.setDocxCollectionName(courseId, collectionName);
                                 logger.info("Updated course " + courseId + " with DOCX collection: " + collectionName);
+                            } else if (fileName.toLowerCase().endsWith(".pptx")) {
+                                courseService.setPptxCollectionName(courseId, collectionName);
+                                logger.info("Updated course " + courseId + " with PPTX collection: " + collectionName);
                             }
                         }
                     }

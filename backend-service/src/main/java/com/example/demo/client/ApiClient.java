@@ -132,6 +132,24 @@ public class ApiClient {
                 .retrieve()
                 .bodyToMono(UploadResponseDto.class);
     }
+
+        public Mono<UploadResponseDto> uploadPptxFile(MultipartFile file, String collectionName) {
+        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
+        parts.add("file", file.getResource());
+                if (collectionName != null) {
+                        parts.add("collection_name", collectionName);
+                }
+
+        return webClient.post()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/api/upload/")
+                        .queryParam("api_key", apiKey)
+                        .build())
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .bodyValue(parts)
+                .retrieve()
+                .bodyToMono(UploadResponseDto.class);
+    }
     
         public Mono<UploadResponseDto> uploadVideo(MultipartFile file) {
         MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
@@ -374,6 +392,28 @@ public class ApiClient {
                         }
                 });
         }
+
+    public Mono<TaskResponseDto> exportQuizFromQuestions(java.util.List<java.util.Map<String, Object>> questions,
+                                                         String collectionName) {
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("questions", questions);
+        body.put("collection_name", collectionName);
+        body.put("api_key", apiKey);
+        return webClient.post()
+                .uri("/api/export_quiz")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(TaskResponseDto.class);
+    }
+
+    public Mono<byte[]> downloadExportedQuiz(String taskId) {
+        return webClient.get()
+                .uri("/api/export_quiz/{taskId}/download", taskId)
+                .accept(MediaType.APPLICATION_XML)
+                .retrieve()
+                .bodyToMono(byte[].class);
+    }
 
     
 }

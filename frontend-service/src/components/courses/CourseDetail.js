@@ -12,6 +12,7 @@ const CourseDetail = () => {
   const [course, setCourse] = useState(null);
   // Track optimistic pending uploads so list shows instantly
   const [pendingFiles, setPendingFiles] = useState([]);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -98,13 +99,18 @@ const CourseDetail = () => {
         <div className="col-md-4">
           <UploadedFilesList
             courseId={id}
-            onChange={(loaded) => { fetchCourse(); reconcilePending(loaded); }}
+            onChange={(loaded) => { setUploadedFiles(Array.isArray(loaded) ? loaded : []); fetchCourse(); reconcilePending(loaded); }}
             pendingFiles={pendingFiles}
           />
           <MaterialUpload
             courseId={id}
             onUploadComplete={() => fetchCourse()}
             onUploadStart={handleUploadStart}
+            hasTextMaterials={
+              // Enable XML upload if at least one PDF/DOCX/PPTX exists
+              (uploadedFiles || []).some(f => ['PDF','DOCX','PPTX'].includes((f.type || '').toUpperCase())) ||
+              (pendingFiles || []).some(f => ['PDF','DOCX','PPTX'].includes((f.type || '').toUpperCase()))
+            }
           />
         </div>
       </div>

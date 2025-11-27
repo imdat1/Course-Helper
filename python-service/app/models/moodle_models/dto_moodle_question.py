@@ -19,6 +19,7 @@ class DTOMoodleQuestion(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     question_text: str
+    question_summary: str | None = None
     question_images: list[DTOMoodleImage] = Field(default_factory=list)
     questions_parsed_and_answered: dict[str, Any] = Field(default_factory=dict)
 
@@ -27,6 +28,7 @@ class DTOMoodleQuestion(BaseModel):
         images = [DTOMoodleImage.from_image_chunk(c) for c in mq.question_images.chunks]
         return cls(
             question_text=mq.question_text,
+            question_summary=mq.summary,
             questions_parsed_and_answered=mq.extracted_question_data or {},
             question_images=images,
         )

@@ -11,7 +11,7 @@ def parse_pdf(file_path: str = None, file_content: bytes = None, file_type: str 
     if file_path == None and file_content==None:
         raise Exception("You must provide either a file path or file content!")
     
-    if file_type == FileTypeFastAPI.WORD:
+    if file_type == FileTypeFastAPI.WORD or file_type == FileTypeFastAPI.POWERPOINT:
         file_content = convert_doc_to_pdf(file_content, file_type="docx")
 
     chunks = partition_pdf(

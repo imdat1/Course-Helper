@@ -153,6 +153,10 @@ export const deleteCourseXmlFile = async (courseId, fileId) => {
   return await apiClient.delete(`/courses/${courseId}/materials/xml/${fileId}`);
 };
 
+export const deleteCoursePptxFile = async (courseId, fileId) => {
+  return await apiClient.delete(`/courses/${courseId}/materials/pptx/${fileId}`);
+};
+
 export const getQuizQuestions = async (courseId, fileId) => {
   return await apiClient.get(`/courses/${courseId}/questions/${fileId}`);
 };
@@ -162,5 +166,13 @@ export const uploadXml = async (courseId, file) => {
   formData.append('file', file);
   return await apiClient.post(`/courses/${courseId}/upload-xml`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
+  });
+};
+
+export const uploadPptx = async (courseId, file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return await apiClient.post(`/courses/${courseId}/upload-pptx`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
   });
 };

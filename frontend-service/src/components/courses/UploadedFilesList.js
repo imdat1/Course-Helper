@@ -1,7 +1,7 @@
 // components/courses/UploadedFilesList.js
 import React, { useEffect, useState, useCallback } from 'react';
-import { getUploadedFiles, deleteCoursePdfFile, deleteCourseDocxFile, deleteCourseVideoFile, deleteCourseXmlFile, getTaskStatus } from '../../services/courseService';
-import { FaFilePdf, FaFileWord, FaTrash, FaVideo, FaYoutube } from 'react-icons/fa';
+import { getUploadedFiles, deleteCoursePdfFile, deleteCourseDocxFile, deleteCourseVideoFile, deleteCourseXmlFile, deleteCoursePptxFile, getTaskStatus } from '../../services/courseService';
+import { FaFilePdf, FaFileWord, FaFilePowerpoint, FaTrash, FaVideo, FaYoutube } from 'react-icons/fa';
 
 const UploadedFilesList = ({ courseId, onChange, pendingFiles = [] }) => {
   const [files, setFiles] = useState([]);
@@ -75,6 +75,8 @@ const UploadedFilesList = ({ courseId, onChange, pendingFiles = [] }) => {
         await deleteCoursePdfFile(courseId, file.fileId);
       } else if (file.type?.toUpperCase() === 'DOCX') {
         await deleteCourseDocxFile(courseId, file.fileId);
+      } else if ((file.type || '').toUpperCase() === 'PPTX') {
+        await deleteCoursePptxFile(courseId, file.fileId);
       } else if (isXml) {
         await deleteCourseXmlFile(courseId, file.fileId);
       } else if (['FILE_VIDEO','YOUTUBE_VIDEO','VIDEO','YOUTUBE'].includes((file.type || '').toUpperCase())) {
@@ -102,6 +104,7 @@ const UploadedFilesList = ({ courseId, onChange, pendingFiles = [] }) => {
 
   const pdfs = mergedFiles.filter(f => (f.type || '').toUpperCase() === 'PDF');
   const docxs = mergedFiles.filter(f => (f.type || '').toUpperCase() === 'DOCX');
+  const pptxs = mergedFiles.filter(f => (f.type || '').toUpperCase() === 'PPTX');
   const videos = mergedFiles.filter(f => ['FILE_VIDEO','YOUTUBE_VIDEO','VIDEO','YOUTUBE'].includes((f.type || '').toUpperCase()))
   const xmls = mergedFiles.filter(f => (f.type || '').toUpperCase() === 'XML');
 
@@ -109,9 +112,7 @@ const UploadedFilesList = ({ courseId, onChange, pendingFiles = [] }) => {
     <div className="card mb-4">
       <div className="card-header d-flex align-items-center justify-content-between">
         <h5 className="mb-0">Uploaded Documents</h5>
-        <button className="btn btn-sm btn-outline-secondary" onClick={load} disabled={loading}>
-          Refresh
-        </button>
+        <button className="btn btn-sm btn-outline-secondary" onClick={load} disabled={loading}>Refresh</button>
       </div>
       <div className="card-body">
         {error && <div className="alert alert-danger">{error}</div>}
@@ -165,6 +166,26 @@ const UploadedFilesList = ({ courseId, onChange, pendingFiles = [] }) => {
             <h6 className="mb-2"><FaFileWord className="me-2 text-primary" />DOCXs</h6>
             <ul className="list-group">
               {docxs.map(f => (
+                <li key={f.fileId} className="list-group-item d-flex align-items-center justify-content-between">
+                  <span className="d-flex flex-column">
+                    <span>{f.filename}</span>
+                    {(f.status || '').toUpperCase() === 'PENDING' && <small className="text-warning">Processing... {f.processingTaskId ? `(task ${f.processingTaskId.slice(0,6)}…)` : ''}</small>}
+                    {(f.status || '').toUpperCase() === 'FAILED' && <small className="text-danger">Failed</small>}
+                  </span>
+                  <button className="btn btn-sm btn-outline-danger" disabled={(f.status || '').toUpperCase()==='PENDING'} onClick={() => onDelete(f)}>
+                    <FaTrash className="me-1" /> Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {pptxs.length > 0 && (
+          <div className="mb-2">
+            <h6 className="mb-2"><FaFilePowerpoint className="me-2 text-warning" />PPTXs</h6>
+            <ul className="list-group">
+              {pptxs.map(f => (
                 <li key={f.fileId} className="list-group-item d-flex align-items-center justify-content-between">
                   <span className="d-flex flex-column">
                     <span>{f.filename}</span>

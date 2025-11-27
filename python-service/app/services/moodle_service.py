@@ -1,8 +1,11 @@
+from prompt_toolkit import prompt
 from app.utils.moodle_utils.extract_questions import extract_questions_from_moodle_xml
 from app.models.moodle_models.moodle_question import MoodleQuestions
+from app.models.moodle_models.dto_moodle_question import DTOMoodleQuestion
 from app.services.summarisation_service import Summarisation
 from langchain_core.language_models.chat_models import BaseChatModel
-from app.prompts.prompt_moodle_answer_question import build_moodle_prompt, prompt_extract_questions
+from app.utils.build_moodle_prompt_util import build_moodle_prompt
+from app.prompts.prompt_moodle_answer_question import prompt_extract_questions
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.embeddings.embeddings import Embeddings
 from qdrant_client import QdrantClient
@@ -11,6 +14,18 @@ from app.utils.qdrant_vector_database_util import get_closest_points_from_qdrant
 from app.models.enums import MoodlePromptBuilderType
 from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+from app.prompts.prompt_moodle_generate_quiz import(
+    prompt_moodle_generate_quiz,
+    prompt_reasoning_test,
+    prompt_image_descriptor
+)
+from app.utils.moodle_utils.parse_elements import (
+    extract_html_fence,
+    extract_outside_html_fence,
+    replace_images_with_descriptions
+)
+from app.models.moodle_models.moodle_export_questions import MoodleExportQuestions
+
 
 settings = get_settings()
 
@@ -21,11 +36,12 @@ class MoodleService():
     questions: MoodleQuestions = None 
     client = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
 
-    def __init__(self, model: BaseChatModel, embedding_model: Embeddings, file_content: bytes) -> None:
+    def __init__(self, model: BaseChatModel, embedding_model: Embeddings, file_content: bytes, mode: bool = True) -> None:
         self.model = model
         self.embedding_model = embedding_model
         self.summarisation_service = Summarisation(model=model)
-        self.questions = extract_questions_from_moodle_xml(file_content)
+        if mode:
+            self.questions = extract_questions_from_moodle_xml(file_content)
     
     def summarise_moodle_questions(self):
         self.questions = self.summarisation_service.summarise_chunks(
@@ -124,3 +140,58 @@ class MoodleService():
                     question['ai_reasoning'] = chain.invoke(input_data)
             else:
                 return  # Unknown type; skip
+            
+    def moodle_export_quiz(self, questions_list: list[DTOMoodleQuestion], collection_name: str):
+        new_questions = []
+        for question in questions_list:
+            question_text = question.question_text
+            embedded_query = self.embedding_model.embed_query(question.question_summary)
+            results_content = get_closest_points_from_qdrant(
+                    client=self.client,
+                    collection_name=collection_name,
+                    embedded_query=embedded_query,
+            )
+            
+            if question.question_images:
+                question_images_processed = []
+                for _, image in enumerate(question.question_images):
+                    image_prompt = ChatPromptTemplate.from_messages(prompt_image_descriptor)
+                    image_chain = image_prompt | self.model | StrOutputParser()
+                    image_description = image_chain.invoke({"image": image.image_base64})
+                    image_description = extract_html_fence(image_description)
+                    question_images_processed.append(image_description)
+                question_text = replace_images_with_descriptions(
+                    html_text=question_text,
+                    descriptions=question_images_processed
+                ) 
+            
+            prompt_reasoning = ChatPromptTemplate.from_messages(prompt_reasoning_test)
+            reasoning_chain = prompt_reasoning | self.model | StrOutputParser()
+            explanations = reasoning_chain.invoke(
+                {
+                    "quiz_question": question_text,
+                    "related_material": results_content
+                }
+            )
+            
+            prompt_quiz_generation = ChatPromptTemplate.from_messages(prompt_moodle_generate_quiz)
+            chain = prompt_quiz_generation | self.model | StrOutputParser()
+            input_data = {
+                "quiz_question": question_text,
+                "related_material": results_content,
+                "explanations": explanations
+            }
+                
+            new_question = chain.invoke(input_data)
+            new_question_html = extract_html_fence(new_question)
+            new_question_reasoning = extract_outside_html_fence(new_question)
+            return_dict = {
+                "question_html": new_question_html,
+                "reasoning": new_question_reasoning
+            }
+            new_questions.append(return_dict)
+        
+        return MoodleExportQuestions(questions_list_dict=new_questions)
+    
+    
+            

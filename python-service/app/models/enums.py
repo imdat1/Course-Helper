@@ -30,8 +30,10 @@ class FileTypeFastAPI(str, Enum):
     """Supported file types in a course"""
     PDF = "application/pdf"
     WORD = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    POWERPOINT = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     XML = ["application/xml", "text/xml"]
     
 class MoodlePromptBuilderType(str, Enum):
     ANSWER_SINGLE_QUESTION = "answer_question"
     ANSWER_ALL_QUESTIONS = "answer_all_questions"
+    GENERATE_QUIZ = "generate_quiz"

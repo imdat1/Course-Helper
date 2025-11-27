@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = os.environ.get("GEMINI_API_KEY")
 
     UPLOAD_DIR: str = "uploads"
+    UPLOAD_MOODLE_DIR: str = "uploads/moodle_quiz_exports"
     
     # Default model parameters
     DEFAULT_MODEL_PARAMS: Dict[str, Any] = {

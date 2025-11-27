@@ -18,6 +18,7 @@ public interface TaskRepository extends JpaRepository<Task, String> {
     List<Task> findByUser(User user);
     List<Task> findByCourse(Course course);
     List<Task> findByStatus(String status);
+    List<Task> findByCourseAndTaskTypeAndSourceFileId(Course course, String taskType, String sourceFileId);
 
     @Modifying
     @Transactional

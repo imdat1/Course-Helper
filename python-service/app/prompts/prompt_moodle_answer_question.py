@@ -40,6 +40,7 @@ RULES:
 * The correct answer must be extracted from the Moodle format, not inferred.
 * Do NOT include explanations in the final output.
 * If multiple blanks appear in one question, separate them into multiple question/answer objects.
+* Translate everything to English if the question is in another language.
 
 OUTPUT:
 Only return the JSON object in a JSON blob. No comments, no surrounding text.
@@ -58,6 +59,7 @@ prompt_moodle_answer_question: List[dict[str, Any]] = [
         Example: {{1:NUMERICAL:=75}} means the correct answer is 75, {{1:MCS:=B~C~A}} means the correct answer is B.
         Using the provided related material, explain step-by-step how to arrive at each answer WHICH IS ALREADY PROVIDED AND IS CORRECT.
         If it's calculation based, show the calculations needed to be done to arrive at the ALREADY PROVIDED CORRECT ANSWER.
+        If your logic or calculations lead to a different answer, that means YOU ARE WRONG. The answers are always CORRECT.
         TELL HOW FOR EACH QUESTION TO ARRIVE AT THE ANSWER, FOR EXAMPLE:
         - Within the exam, there's an input field with '{{1:NUMERICAL:=75}}'.
         - You'd say 'The correct answer for that question is 75 because ...' and then provide reasoning based on the related material.
@@ -97,30 +99,3 @@ prompt_answer_single_question: List[dict[str, Any]] = [
                 """,
             },
 ]
-
-def build_moodle_prompt(images: Images, mode: MoodlePromptBuilderType) -> ChatPromptTemplate:
-    """Build a multimodal prompt template.
-
-    For each image chunk we add a placeholder referencing an input variable
-    (image_0, image_1, ...). At invocation time those variables should be
-    supplied in the input_data dict, e.g. input_data["image_0"] = <base64 string>.
-    LangChain will then substitute them into the image_url.
-    """
-    if mode == MoodlePromptBuilderType.ANSWER_ALL_QUESTIONS:
-        basic_prompt = prompt_moodle_answer_question.copy()
-        print(basic_prompt)
-    
-    elif mode == MoodlePromptBuilderType.ANSWER_SINGLE_QUESTION:
-        basic_prompt = prompt_answer_single_question.copy()
-        
-    if images and images.chunks:
-        for i, _ in enumerate(images.chunks):
-            # Use a template variable inside the URL so the base64 can be
-            # injected at runtime via input_data (image_i keys).
-            basic_prompt.append(  # type: ignore[arg-type]
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{{image_{i}}}"},
-                }
-            )
-    return ChatPromptTemplate.from_messages([("user", basic_prompt)])

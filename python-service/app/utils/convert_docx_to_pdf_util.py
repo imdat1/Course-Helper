@@ -1,6 +1,9 @@
 import os
 import subprocess
 import tempfile
+import sys
+
+platform_id = sys.platform
 
 def convert_doc_to_pdf(file_content: bytes, file_type: str = "docx") -> bytes:
     """
@@ -27,8 +30,13 @@ def convert_doc_to_pdf(file_content: bytes, file_type: str = "docx") -> bytes:
                 input_file.write(file_content)
 
             # Convert using LibreOffice (headless mode)
+            if platform_id.startswith('win'):
+                libreoffice_cmd = 'soffice'
+            else:
+                libreoffice_cmd = 'libreoffice'
+            
             cmd = [
-                'libreoffice', '--headless', '--convert-to', 'pdf',
+                libreoffice_cmd, '--headless', '--convert-to', 'pdf',
                 '--outdir', temp_dir, input_path
             ]
 

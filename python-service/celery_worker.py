@@ -1,3 +1,4 @@
+from app.utils.moodle_utils.create_xml_file import create_moodle_xml
 from celery_config import celery_app
 from app.models.request import AIRequest, UriRequest
 from app.models.moodle_models.dto_moodle_question import DTOMoodleQuestion
@@ -187,3 +188,46 @@ def process_xml_file(file_id: str,
         "status": "XML processing completed",
         "questions": dto_questions,
     }
+
+@celery_app.task(name="export_moodle_quiz")
+def export_moodle_quiz(questions_list: list, collection_name: str, api_key: str):
+    # Ensure incoming list is parsed into DTOMoodleQuestion objects if provided as dicts
+    try:
+        parsed_questions: list[DTOMoodleQuestion] = []
+        for q in questions_list:
+            if isinstance(q, DTOMoodleQuestion):
+                parsed_questions.append(q)
+            elif isinstance(q, dict):
+                parsed_questions.append(DTOMoodleQuestion(**q))
+            else:
+                # Fallback: try to convert via model_dump/model if it is pydantic-like
+                try:
+                    parsed_questions.append(DTOMoodleQuestion(**(q.model_dump() if hasattr(q, "model_dump") else q)))
+                except Exception:
+                    raise ValueError("Invalid question payload format")
+    except Exception as e:
+        raise e
+
+    embedding_model = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004",
+                                            google_api_key=api_key,
+                                            task_type="retrieval_document")
+
+    model = ChatGoogleGenerativeAI(temperature=0.5,
+                               model="gemini-2.0-flash",
+                               api_key=api_key)
+    
+    moodle_service = MoodleService(model=model,
+                                   embedding_model=embedding_model,
+                                   file_content=b"", # Empty content since we are only exporting
+                                   mode = False)
+    
+    questions_list_dict = moodle_service.moodle_export_quiz(questions_list=parsed_questions, collection_name=collection_name)
+    
+    ts = int(time.time())
+    output_path = settings.UPLOAD_MOODLE_DIR + f"/moodle_quiz_export_{ts}.xml"
+    create_moodle_xml(questions_list_dict.questions_list_dict, output_file=output_path)
+
+    with open(output_path, "rb") as f:
+        file_data = f.read()
+    
+    return file_data
