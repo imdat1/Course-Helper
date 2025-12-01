@@ -18,7 +18,7 @@ def create_query_vector_tool(client: QdrantClient, embedding_model_for_retrieval
     """
     def _query_vector_database(question: str, top_k: int = 5) -> Dict[str, Any]:
         """
-        Use this tool to answer any user question about a PDF file that has been processed and embedded in a vector database.
+        Use this tool to answer any user question about a document (PDF/DOCX/PPTX) that has been processed and embedded in a vector database.
         Do not ask the user to rephrase their query. Just pass their question as the query argument to this tool and return a helpful response based on the results.
 
         Given a natural language question, this tool retrieves the most relevant chunks from the vector database using semantic search.
@@ -27,7 +27,7 @@ def create_query_vector_tool(client: QdrantClient, embedding_model_for_retrieval
             query (str): The user's natural language question.
 
         Returns:
-            Dict[str, Any]: A list of relevant PDF chunks that help answer the question.
+            Dict[str, Any]: A list of relevant document chunks that help answer the question.
         """
         if client is None or embedding_model_for_retrieval is None or collection_name is None:
             raise ValueError("Client, embedding model, and collection name must be provided.")
@@ -57,16 +57,16 @@ def create_query_vector_tool(client: QdrantClient, embedding_model_for_retrieval
     return Tool(
         name="search_pdf_content",
         description="""
-        Use this tool to respond to any user input mentioning a PDF file, even if they do not explicitly ask a question.
+        Use this tool to respond to any user input mentioning a document (PDF/DOCX/PPTX), even if they do not explicitly ask a question.
     
-        This includes requests to describe, explain, summarize, or provide details about any PDF content. 
-        Trigger this tool whenever the user input contains any reference to a PDF file or content.
+        This includes requests to describe, explain, summarize, or provide details about any document content. 
+        Trigger this tool whenever the user input contains any reference to a PDF, DOCX, or PPTX file or content.
 
         Args:
             question (str): The user's natural language question.
 
         Returns:
-            Dict[str, Any]: A list of relevant PDF chunks that help answer the question.
+            Dict[str, Any]: A list of relevant document chunks that help answer the question.
         """,
         func=_query_vector_database,
         args_schema=query_vector_schema.QueryVectorSchema

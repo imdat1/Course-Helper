@@ -30,7 +30,6 @@ class AgentService:
             client=client,
             system_prompt=request.system_instruction_text,
             pdf_collection_name=request.pdf_collection_name,
-            docx_collection_name=request.docx_collection_name,
             video=request.video,
         )
 

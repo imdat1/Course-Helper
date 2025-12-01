@@ -1,3 +1,4 @@
+import os
 import xml.dom.minidom as minidom
 
 def create_moodle_xml(questions_list_dict, output_file="output.xml"):
@@ -30,6 +31,10 @@ def create_moodle_xml(questions_list_dict, output_file="output.xml"):
         text_node.appendChild(cdata)
         questiontext.appendChild(text_node)
 
-    # Save
+    # Ensure output directory exists, then save
+    output_dir = os.path.dirname(output_file)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+
     with open(output_file, "w", encoding="utf-8") as f:
         doc.writexml(f, indent="", addindent="  ", newl="\n", encoding="UTF-8")

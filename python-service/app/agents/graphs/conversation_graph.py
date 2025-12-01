@@ -16,7 +16,6 @@ class ConversationGraph:
                  client: QdrantClient = None,
                  embedding_model: Embeddings = None,
                  pdf_collection_name: str = None,
-                 docx_collection_name: str = None,
                  system_prompt: str = None,
                  video: Video = None
                  ):
@@ -24,7 +23,6 @@ class ConversationGraph:
         self.tools = get_tools(client=client,
                                embedding_model=embedding_model,
                                pdf_collection_name=pdf_collection_name,
-                               docx_collection_name= docx_collection_name,
                                llm=llm,
                                video=video
                                )

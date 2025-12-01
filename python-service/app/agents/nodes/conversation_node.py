@@ -2,7 +2,6 @@
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import ToolMessage, SystemMessage
 from app.agents.states.conversation_state import ConversationState
-from app.agents.tools.tool_config import get_tools
 
 class Nodes:
     llm: BaseChatModel = None

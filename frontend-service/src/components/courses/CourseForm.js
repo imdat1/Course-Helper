@@ -14,35 +14,6 @@ const CourseForm = () => {
   const [error, setError] = useState('');
   const isEdit = !!id;
 
-  // Add this inside your component, before the return statement
-useEffect(() => {
-  const testApi = async () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      console.log('Testing direct API with token:', token ? 'Token exists' : 'No token');
-      
-      // Test a simple GET request first
-      const testResponse = await fetch('http://localhost:8080/api/courses', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      console.log('Test API status:', testResponse.status);
-      const data = await testResponse.text();
-      console.log('Test API response:', data.substring(0, 100)); // First 100 chars
-      
-      if (data.includes('<!DOCTYPE html>')) {
-        console.error('Received HTML instead of JSON - likely an auth issue');
-      }
-    } catch (err) {
-      console.error('Test API error:', err);
-    }
-  };
-  
-  testApi();
-}, []);
-
   const fetchCourse = async () => {
     try {
       const response = await getCourseById(id);

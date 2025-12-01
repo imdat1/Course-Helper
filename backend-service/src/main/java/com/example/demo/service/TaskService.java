@@ -190,20 +190,13 @@ public class TaskService {
                     String collectionName = (String) resultMap.get("qdrant_collection_name");
                     
                     if (collectionName != null) {
-                        // Determine if this is a PDF or DOCX based on the original file
+                        // Determine file type, but always use the unified collection
                         String fileName = getFileName(parseTaskStatus);
                         
                         if (fileName != null) {
-                            if (fileName.toLowerCase().endsWith(".pdf")) {
-                                courseService.setPdfCollectionName(courseId, collectionName);
-                                logger.info("Updated course " + courseId + " with PDF collection: " + collectionName);
-                            } else if (fileName.toLowerCase().endsWith(".docx")) {
-                                courseService.setDocxCollectionName(courseId, collectionName);
-                                logger.info("Updated course " + courseId + " with DOCX collection: " + collectionName);
-                            } else if (fileName.toLowerCase().endsWith(".pptx")) {
-                                courseService.setPptxCollectionName(courseId, collectionName);
-                                logger.info("Updated course " + courseId + " with PPTX collection: " + collectionName);
-                            }
+                            // Regardless of extension, persist under PDF collection name as the unified collection
+                            courseService.setPdfCollectionName(courseId, collectionName);
+                            logger.info("Updated course " + courseId + " with unified document collection: " + collectionName);
                         }
                     }
                 }

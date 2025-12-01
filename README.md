@@ -1,4 +1,33 @@
+# CourseHelper
+
 BackEnd in Spring Boot, FrontEnd in React, Python LangChain Agentic Chatbot
+
+## Quick Start with Docker
+
+The easiest way to run the entire application:
+
+```powershell
+# 1. Copy and configure environment variables
+Copy-Item .env.example .env
+# Edit .env and set GEMINI_API_KEY (and optionally JWT_SECRET, etc.)
+
+# 2. Build & start all services (Docker Desktop recommended)
+docker compose up -d --build
+# (If using legacy docker-compose binary, you can use: docker-compose up -d --build)
+
+# 3. Access the application
+# Frontend: http://localhost:3000
+# Backend API: http://localhost:8080
+# Python API: http://localhost:8000
+
+# 4. View logs (optional)
+docker compose logs -f backend-service
+
+# 5. Stop all services
+docker compose down
+```
+
+## Local Development Setup
 
 Just put Google Studio API key in application-properties in SpringBoot BackEnd app and '.env' in Python service.
 

@@ -1,10 +1,8 @@
 package com.example.demo.security;
 
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -13,7 +11,10 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Component
 public class JwtRequestFilter extends OncePerRequestFilter {
@@ -47,9 +48,11 @@ public class JwtRequestFilter extends OncePerRequestFilter {
             } catch (Exception e) {
                 logger.warn("JWT Token has expired or is invalid");
             }
-        } else {
+        } else if (requestTokenHeader != null) {
+            // Only log warning if header exists but is malformed
             logger.warn("JWT Token does not begin with Bearer String");
         }
+        // No warning for missing Authorization header - this is expected for public endpoints
 
         // Once we get the token validate it.
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
