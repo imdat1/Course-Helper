@@ -1,6 +1,22 @@
 import os
 import xml.dom.minidom as minidom
 
+def _sanitize_for_cdata(text: str) -> str:
+    """Sanitize text for inclusion inside a CDATA section.
+
+    CDATA cannot contain the literal sequence ']]>'. To preserve content while
+    keeping a single CDATA node, split the sequence safely by closing and
+    reopening CDATA at that point.
+    """
+    if text is None:
+        return ""
+    # Replace any occurrence of ']]>' with a safe split across CDATA boundaries
+    # per XML best practice.
+    return text.replace(
+        "]]>",
+        "]]]]]><![CDATA[>"
+    )
+
 def create_moodle_xml(questions_list_dict, output_file="output.xml"):
     # Create XML document
     doc = minidom.Document()
@@ -27,7 +43,9 @@ def create_moodle_xml(questions_list_dict, output_file="output.xml"):
         <p>Now here is the question:</p>
         {question_dict.get('question_html', '')}
         """
-        cdata = doc.createCDATASection(question_creator)   # <-- REAL CDATA, no escaping
+        # Ensure CDATA-safe content (no raw ']]>' sequences)
+        safe_text = _sanitize_for_cdata(question_creator)
+        cdata = doc.createCDATASection(safe_text)   # real CDATA
         text_node.appendChild(cdata)
         questiontext.appendChild(text_node)
 

@@ -41,7 +41,10 @@ const MultipleChoiceInput = ({ placeholder, answerObj, onSubmit, submitted }) =>
         <option value="">Select</option>
         {options.map((o,i)=><option key={i} value={o.text}>{o.text}</option>)}
       </select>
-      {!submitted && <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>onSubmit(selected)}>Submit</button>}
+      {!submitted && <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{
+        const isCorrectByPlaceholder = options.some(o => o.correctFlag && (''+o.text).trim().toLowerCase() === (''+selected).trim().toLowerCase());
+        onSubmit(selected, isCorrectByPlaceholder);
+      }}>Submit</button>}
     </span>
   );
 };
@@ -74,12 +77,21 @@ const QuizQuestion = ({ question }) => {
   const [correctnessMap, setCorrectnessMap] = useState({}); // idx -> true/false
   const [showTopReasoning, setShowTopReasoning] = useState(false);
 
-  const submit = (idx, value, answerObj) => {
+  const submit = (idx, value, answerObj, isCorrectByPlaceholder = undefined) => {
     setSubmittedMap(prev=>({ ...prev, [idx]: value }));
+    const user = ('' + value).trim().toLowerCase();
+    let decided = undefined;
     if (answerObj && answerObj.correct_answer) {
-      const user = ('' + value).trim().toLowerCase();
       const correct = ('' + answerObj.correct_answer).trim().toLowerCase();
-      setCorrectnessMap(prev=>({ ...prev, [idx]: user === correct }));
+      decided = (user === correct);
+    }
+    if (decided === false || decided === undefined) {
+      if (typeof isCorrectByPlaceholder === 'boolean') {
+        decided = isCorrectByPlaceholder;
+      }
+    }
+    if (typeof decided === 'boolean') {
+      setCorrectnessMap(prev=>({ ...prev, [idx]: decided }));
     }
   };
   const resetAnswers = () => setSubmittedMap({});
@@ -103,7 +115,7 @@ const QuizQuestion = ({ question }) => {
 
           let inputEl = null;
           if (ph.includes(':MC:') || ph.includes(':MCS:')) {
-            inputEl = <MultipleChoiceInput placeholder={ph} answerObj={answerObj} submitted={submitted} onSubmit={(val)=>submit(idx,val,answerObj)} />;
+            inputEl = <MultipleChoiceInput placeholder={ph} answerObj={answerObj} submitted={submitted} onSubmit={(val, isCorrectByPlaceholder)=>submit(idx,val,answerObj,isCorrectByPlaceholder)} />;
           } else if (ph.includes(':NUMERICAL:')) {
             inputEl = <NumericalInput answerObj={answerObj} submitted={submitted} onSubmit={(val)=>submit(idx,val,answerObj)} />;
           } else {

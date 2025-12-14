@@ -29,7 +29,7 @@ TASK:
    [
         {{
             "question": "<cleaned question text>",
-            "correct_answer": "<the correct answer as text>"
+            "correct_answer": "<the correct answer as text (EXACTLY as it appears in the Moodle encoding, same script and spelling, NO TRANSLATION)>"
         }}
    ]
 }}
@@ -40,7 +40,7 @@ RULES:
 * The correct answer must be extracted from the Moodle format, not inferred.
 * Do NOT include explanations in the final output.
 * If multiple blanks appear in one question, separate them into multiple question/answer objects.
-* Translate everything to English if the question is in another language.
+* Translate the question and guidelines to English if the source language differs, BUT DO NOT translate answer options or the extracted correct answer. Preserve the original answer text exactly as it appears (script, casing, diacritics, and spelling).
 
 OUTPUT:
 Only return the JSON object in a JSON blob. No comments, no surrounding text.
